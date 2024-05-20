@@ -12,15 +12,16 @@ export KARPENTER_VERSION=v0.32.0
 #KEDA Variables
 export NAMESPACE=keda
 export SERVICE_ACCOUNT=keda-service-account
-export AQS_TARGET_DEPLOYMENT="sqs-app"
+export AQS_TARGET_DEPLOYMENT="aqs-app"
 export AQS_TARGET_NAMESPACE="keda-test"
 
 #****************** ADD VALUES FOR THE FOLLOWING ENVIROMENT VARIABLES ***********************
 export AZURE_STORAGE_ACCOUNT_NAME="<storage account name>"
-export AZURE_STORAGE_ACCOUNT_KEY="<storage account key>"
-export AZURE_STORAGE_CONNECTION_STRING="<storage account connection string>"
+# export AZURE_STORAGE_ACCOUNT_KEY="<storage account key>"
+# export AZURE_STORAGE_CONNECTION_STRING="<storage account connection string>"
 export AZURE_QUEUE_NAME="aws2azmsgs"
-export AZURE_COSMOSDB_CONNECTION_STRING="<cosmosdb connection string>"
+# export AZURE_COSMOSDB_CONNECTION_STRING="<cosmosdb connection string>"
+export AZURE_COSMOSDB_ACCOUNT_NAME="<cosmosdb account name>"
 export AZURE_COSMOSDB_TABLE="aws2azpmts"
 #********************************************************************************************
 export LOCAL_NAME="aksdemo"
