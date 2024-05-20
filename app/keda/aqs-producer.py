@@ -4,48 +4,53 @@ from datetime import datetime, timedelta
 import os
 from os import environ
 import subprocess
-from azure.storage.queue import QueueClient
+from azure.storage.queue import QueueClient, QueueServiceClient
+from azure.identity import DefaultAzureCredential
 
 
 def send_message(message_body):
 
     print("Start fn send message")
-    connection_string = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+    accountUrl = f"https://{os.environ['AZURE_STORAGE_ACCOUNT_NAME']}.queue.core.windows.net"
     queue_name = os.environ["AZURE_QUEUE_NAME"]
 
-    sqs_client = QueueClient.from_connection_string(
-        conn_str=connection_string, queue_name=queue_name
-    )
-    response = sqs_client.send_message(message_body)
+
+    creds = DefaultAzureCredential()
+    aqs_client = QueueClient(accountUrl, queue_name, credential=creds)
+    response = aqs_client.send_message(message_body)
     print(f"messages send: {response}")
     print("End fn send message")
-    sqs_client.close()
+    aqs_client.close()
 
 
 starttime = time.time()
 i = 0
-while True:
-    if (
-        "AZURE_STORAGE_CONNECTION_STRING" in os.environ
-        and "AZURE_QUEUE_NAME" in os.environ
-    ):
-        t = time.localtime()
-        time.sleep(1.0 - ((time.time() - starttime) % 1.0))
-        currenttime = time.strftime("%H:%M:%S", t)
-        print(f"Start ASQ call : {currenttime}")
 
-        i = i + 1
-        date_format = "%Y-%m-%d %H:%M:%S.%f"
-        current_dateTime = datetime.utcnow().strftime(date_format)
-        messageBody = {
-            "msg": f"Scale Buddy !!! : COUNT {i}",
-            "srcStamp": current_dateTime,
-        }
-        print(json.dumps(messageBody))
-        send_message(json.dumps(messageBody))
-        currenttime = time.strftime("%H:%M:%S", t)
-        print(f"End ASQ call {currenttime}")
-    else:
-        print(
-            "Azure Storage Account name is missing from environment. Run environmentVariables.sh first "
-        )
+if (
+    "AZURE_STORAGE_ACCOUNT_NAME" in os.environ
+    and "AZURE_QUEUE_NAME" in os.environ
+):
+    try:
+        while True:
+            t = time.localtime()
+            time.sleep(1.0 - ((time.time() - starttime) % 1.0))
+            currenttime = time.strftime("%H:%M:%S", t)
+            print(f"Start ASQ call : {currenttime}")
+
+            i = i + 1
+            date_format = "%Y-%m-%d %H:%M:%S.%f"
+            current_dateTime = datetime.utcnow().strftime(date_format)
+            messageBody = {
+                "msg": f"Scale Buddy !!! : COUNT {i}",
+                "srcStamp": current_dateTime,
+            }
+            print(json.dumps(messageBody))
+            send_message(json.dumps(messageBody))
+            currenttime = time.strftime("%H:%M:%S", t)
+            print(f"End ASQ call {currenttime}")
+    except Exception as e:
+        print(f"Error: {e}")
+else:
+    print(
+        "Azure Storage Account name is missing from environment. Run environmentVariables.sh first "
+    )
