@@ -5,14 +5,16 @@ from datetime import datetime
 import os
 from os import environ
 from azure.storage.queue import QueueClient
-from azure.data.tables import ( TableServiceClient )
+from azure.data.tables import TableServiceClient
+from azure.identity import DefaultAzureCredential
+
 
 def check_env():
-    if 'AZURE_STORAGE_CONNECTION_STRING' in os.environ:
-        conn_str = os.environ['AZURE_STORAGE_CONNECTION_STRING']
+    if 'AZURE_STORAGE_ACCOUNT_NAME' in os.environ:
+        conn_str = os.environ['AZURE_STORAGE_ACCOUNT_NAME']
         print ('Connection string set from envars')
     else:
-        raise ValueError('Environment variable AZURE_STORAGE_CONNECTION_STRING is missing!')
+        raise ValueError('Environment variable AZURE_STORAGE_ACCOUNT_NAME is missing!')
 
     if 'AZURE_QUEUE_NAME' in os.environ:
         queue_name = os.environ['AZURE_QUEUE_NAME']
@@ -20,11 +22,11 @@ def check_env():
     else:
         raise ValueError ('Environment variable AZURE_QUEUE_NAME is missing!')
 
-    if 'AZURE_COSMOSDB_CONNECTION_STRING' in os.environ:
-        cosmos_conn_string = os.environ['AZURE_COSMOSDB_CONNECTION_STRING']
+    if 'AZURE_COSMOSDB_ACCOUNT_NAME' in os.environ:
+        cosmos_conn_string = os.environ['AZURE_COSMOSDB_ACCOUNT_NAME']
         print ('Cosmos connection string set from envars')
     else:
-        raise ValueError('Environment variable AZURE_COSMOSDB_CONNECTION_STRING is missing')
+        raise ValueError('Environment variable AZURE_COSMOSDB_ACCOUNT_NAME is missing')
 
     if 'AZURE_COSMOSDB_TABLE' not in os.environ:
         raise ValueError('Environment variable AZURE_COSMOSDB_TABLE is missing!')
@@ -36,8 +38,12 @@ def check_env():
 def receive_message():
     try:
         print("Start fn receive message")
-        sqs_client = QueueClient.from_connection_string(conn_str=conn_str, queue_name=queue_name)
-        response = sqs_client.receive_message(visibility_timeout=60)
+        #sqs_client = QueueClient.from_connection_string(conn_str=conn_str, queue_name=queue_name)
+        creds = DefaultAzureCredential()
+        account_url = f"https://{storage_account_name}.queue.core.windows.net"
+        aqs_client = QueueClient(account_url=account_url, queue_name=queue_name, credential=creds)
+
+        response = aqs_client.receive_message(visibility_timeout=60)
 
         print (f'Received queue message {response}')
         message_body = response.content
@@ -49,48 +55,45 @@ def receive_message():
     except Exception as ex:
         print(f"Error happened in receive_message : {ex} ")
     finally:
-        sqs_client.close()
+        aqs_client.close()
     
 def save_data(_message):
-    try:
-        print(f'save data src msg :{_message}')
-        jsonMessage = json.loads(_message)
-        print(f'Src Message :{jsonMessage["msg"]},{jsonMessage["srcStamp"]}')
-        #current_dateTime = json.dumps(datetime.now(),default= str)
-        date_format = '%Y-%m-%d %H:%M:%S.%f'
-        current_dateTime = datetime.utcnow().strftime(date_format)
+    print(f'save data src msg :{_message}')
+    jsonMessage = json.loads(_message)
+    print(f'Src Message :{jsonMessage["msg"]},{jsonMessage["srcStamp"]}')
 
-        _id = str(uuid.uuid1())
-        print(f"id:{_id}")
+    date_format = '%Y-%m-%d %H:%M:%S.%f'
+    #current_dateTime = json.dumps(datetime.now(),default= str)
+    current_dateTime = datetime.utcnow().strftime(date_format)
 
-        table = TableServiceClient(
-            connection_string=cosmos_conn_string
-            )
-        
-        messageProcessingTime = datetime.utcnow() - datetime.strptime(jsonMessage["srcStamp"],date_format) 
-        print(f'messageProcessingTime: {messageProcessingTime.total_seconds()}')
+    _id = str(uuid.uuid1())
+    print(f"id:{_id}")
 
-        entity={
-            'PartitionKey': _id,
-            'RowKey': str(messageProcessingTime.total_seconds()),
-            'data': jsonMessage['msg'],
-            'srcStamp': jsonMessage['srcStamp'],
-            'dateStamp': current_dateTime
-        }
-        
-        response = table.insert_entity(
-            table_name=cosmosdb_table,
-            entity=entity,
-            timeout=60)
-        
-        print (f"insert_entity response timestamp {str(response)}")
-    except Exception as error:
-        print(f"Error has happened : {error}")
+    creds = DefaultAzureCredential()
+    table = TableServiceClient(
+        endpoint=f"https://{storage_account_name}.table.core.windows.net/",  
+        credential=creds).get_table_client(table_name=cosmosdb_table)
+    
+    messageProcessingTime = datetime.utcnow() - datetime.strptime(jsonMessage["srcStamp"],date_format) 
+    print(f'messageProcessingTime: {messageProcessingTime.total_seconds()}')
+
+    entity={
+        'PartitionKey': _id,
+        #'RowKey': str(messageProcessingTime.total_seconds()),
+        'RowKey': datetime.utcnow().strftime(date_format),
+        'data': jsonMessage['msg'],
+        'srcStamp': jsonMessage['srcStamp'],
+        'dateStamp': current_dateTime
+    }
+    
+    response = table.create_entity(entity=entity)
+    print (f"insert_entity response timestamp {str(response)}")
+
 
 try:
     # create a function to add numbers
     starttime = time.time()
-    conn_str, queue_name, cosmos_conn_string, cosmosdb_table = check_env()
+    storage_account_name, queue_name, cosmosdb_account_name, cosmosdb_table = check_env()
 
     while True:
         t = time.localtime()
