@@ -5,12 +5,12 @@ RUN apt update
 
 RUN apt install python3 -y
 RUN apt install -y python3-pip
-RUN pip3 install --upgrade pip
-RUN pip3 install azure-storage-queue
-RUN pip3 install azure-cosmosdb-table
+RUN pip3 install --upgrade pip --break-system-packages
+RUN pip3 install azure-storage-queue --break-system-packages
+RUN pip3 install azure-cosmosdb-table --break-system-packages
 
 WORKDIR /usr/app/src
 
-COPY aqs-consunmer.py ./
+COPY aqs-consumer.py ./
 
 CMD [ "python3", "./aqs-consumer.py" ]
