@@ -5,8 +5,32 @@
 # NOTE: Make sure you have run ./deployment/environmentVariables.sh before running this script
 #*************************
 
-#cat <<EOF | kubectl apply -f -
-cat >>./deployment/keda/keda-python-app.yaml <<EOF
+# Load environment variables
+#. ./deployment/environmentVariables.sh
+
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Get AKS cluster credentials" ${NC}
+az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME
+if [ $? -ne 0 ]; then
+  echo "Failed to get AKS cluster credentials"
+  exit 1
+fi
+
+# Check if the target namespace exists
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Check if the target namespace exists" ${NC}
+if kubectl get namespace $AQS_TARGET_NAMESPACE >/dev/null 2>&1; then
+  echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Namespace $AQS_TARGET_NAMESPACE exists" ${NC}
+else
+  echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating $AQS_TARGET_NAMESPACE namespace" ${NC}
+  kubectl create namespace $AQS_TARGET_NAMESPACE
+  if [ $? -ne 0 ]; then
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to create namespace $AQS_TARGET_NAMESPACE" ${NC}
+    exit 1
+  fi
+fi
+
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Deploying app" ${NC}
+#cat >>./deployment/keda/keda-python-app.yaml <<EOF
+cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,3 +69,11 @@ spec:
             memory: "128Mi"
             cpu: "500m"
 EOF
+
+if [ $? -ne 0 ]; then
+  echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to deploy app" ${NC}
+  exit 1
+fi
+
+echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') App deployed successfully" ${NC}
+exit 0
