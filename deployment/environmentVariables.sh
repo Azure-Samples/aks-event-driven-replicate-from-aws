@@ -10,10 +10,10 @@ export K8sversion="1.28"
 export KARPENTER_VERSION=v0.32.0
 
 #KEDA Variables
-export NAMESPACE=keda
-export SERVICE_ACCOUNT=keda-service-account
+export NAMESPACE="keda"
+export SERVICE_ACCOUNT="aqs-app-service-account"
 export AQS_TARGET_DEPLOYMENT="aqs-app"
-export AQS_TARGET_NAMESPACE="keda-test"
+export AQS_TARGET_NAMESPACE="aqs-demo"
 
 #****************** ADD VALUES FOR THE FOLLOWING ENVIROMENT VARIABLES ***********************
 export AZURE_STORAGE_ACCOUNT_NAME="<storage account name>"
