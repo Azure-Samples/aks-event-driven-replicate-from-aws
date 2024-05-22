@@ -1,8 +1,28 @@
-echo "=====Deploy KEDA Scale Object Using WorkloadID for Auth===="
+#!/bin/bash
 
-if test -f "./deployment/keda/kedaScaleObject.yaml"; then
-  rm ./deployment/keda/kedaScaleObject.yaml
+# Load environment variables
+#. ./deployment/environmentVariables.sh
+
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Get AKS cluster credentials" ${NC}
+az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME
+if [ $? -ne 0 ]; then
+  echo "Failed to get AKS cluster credentials"
+  exit 1
 fi
+
+# Check if the target namespace exists
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Check if the target namespace exists" ${NC}
+if kubectl get namespace $AQS_TARGET_NAMESPACE >/dev/null 2>&1; then
+  echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Namespace $AQS_TARGET_NAMESPACE exists" ${NC}
+else
+  echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating $AQS_TARGET_NAMESPACE namespace" ${NC}
+  kubectl create namespace $AQS_TARGET_NAMESPACE
+  if [ $? -ne 0 ]; then
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to create namespace $AQS_TARGET_NAMESPACE" ${NC}
+    exit 1
+  fi
+fi
+
 
 # get the workload identity client id
 if [ -z "$WORKLOAD_MANAGED_IDENTITY_NAME" ]; then
@@ -18,7 +38,10 @@ else
   fi
 fi
 
-cat >>./deployment/keda/kedaScaleObject.yaml <<EOF
+
+echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Deploying KEDA scale object using workload ID for auth" ${NC}
+#cat >>./deployment/keda/keda-python-app.yaml <<EOF
+cat <<EOF | kubectl apply -f -
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -28,7 +51,7 @@ spec:
   scaleTargetRef:
     name: ${AQS_TARGET_DEPLOYMENT}     #K8s deployement to target
   minReplicaCount: 1  # We don't want pods if the queue is empty nginx-deployment
-  maxReplicaCount: 2000  # We don't want to have more than 15 replicas
+  maxReplicaCount: 15 # We don't want to have more than 15 replicas
   pollingInterval: 30 # How frequently we should go for metrics (in seconds)
   cooldownPeriod:  10 # How many seconds should we wait for downscale  
   triggers:
