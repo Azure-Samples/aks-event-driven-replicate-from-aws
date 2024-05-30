@@ -109,8 +109,6 @@ else
     exit 1
 
 fi
-
-
 echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >>./deployment/deploy.state
 
 # Generate storage account
@@ -133,17 +131,26 @@ fi
 echo "AZURE_STORAGE_ACCOUNT_NAME=${AZURE_STORAGE_ACCOUNT_NAME}" >>./deployment/deploy.state
 
 # Create a storage queue
-if ! az storage queue exists --name "$AZURE_QUEUE_NAME" --account-name "$AZURE_STORAGE_ACCOUNT_NAME" &>/dev/null; then
-    az storage queue create --name "$AZURE_QUEUE_NAME" --account-name "$AZURE_STORAGE_ACCOUNT_NAME"
-    if [ $? -eq 0 ]; then
-        echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage queue $AZURE_QUEUE_NAME created successfully." ${NC}
-    else
-        echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage queue $AZURE_QUEUE_NAME creation failed." ${NC}
-        exit 1
-    fi
+az storage queue create --name "$AZURE_QUEUE_NAME" --account-name "$AZURE_STORAGE_ACCOUNT_NAME" --auth-mode login
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage queue $AZURE_QUEUE_NAME created successfully." ${NC}
 else
-    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage queue $AZURE_QUEUE_NAME already exists."
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage queue $AZURE_QUEUE_NAME creation failed." ${NC}
+    exit 1
 fi
+echo "AZURE_QUEUE_NAME=${AZURE_QUEUE_NAME}" >>./deployment/deploy.state
+
+#
+# We are using Azure Storage Tables instead of CosmosDB for now
+az storage table create --name "$AZURE_COSMOSDB_TABLE" --account-name "$AZURE_STORAGE_ACCOUNT_NAME" --auth-mode login
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage table $AZURE_COSMOSDB_TABLE created successfully." ${NC}
+else
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage qutableeue $AZURE_COSMOSDB_TABLE creation failed." ${NC}
+    exit 1
+fi
+echo "AZURE_COSMOSDB_TABLE=${AZURE_COSMOSDB_TABLE}" >>./deployment/deploy.state
+
 # Shouldn't need this part since we are using workload identity for accessing reseources.
 #
 # # Create Azure Key Vault
@@ -154,7 +161,7 @@ fi
 #     az keyvault create --name "$KEY_VAULT_NAME" --resource-group "$RESOURCE_GROUP" --location "$LOCATION" --enable-rbac-authorization true
 #     if [ $? -eq 0 ]; then
 #         echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Key vault $KEY_VAULT_NAME created successfully." ${NC}
-    
+#    
 #     else
 #         echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Key vault $KEY_VAULT_NAME creation failed." ${NC}
 #         exit 1
@@ -164,7 +171,7 @@ fi
 # fi
 # echo "KEY_VAULT_NAME=${KEY_VAULT_NAME}" >>./deployment/deploy.state
 # keyVaultResourceId=$(az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$RESOURCE_GROUP" --query id --output tsv)
-
+#
 # # Assign Key Vault Administrator role to the object id of the principal running the script.
 # # This is required to create secrets in the key vault.
 # if az account show --query "user.type" --output tsv | grep -q "servicePrincipal"; then
@@ -275,6 +282,7 @@ managedIdentityResourceId=$(echo "$managedIdentity" | jq -r '.id')
 # Grant the managed identity access to the ACR -- using assignee-principal-type and assignee-object-id to avoid calling the Grpah API
 # acrResourceId=$(az acr show --name "$AZURE_CONTAINER_REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query "id" --output tsv)
 
+
 # Grant the managed identity access to the ACR
 az role assignment create --assignee-object-id "$managedIdentityObjectId" --assignee-principal-type "ServicePrincipal" --role acrpull --scope "$acrResourceId"
 if [ $? -eq 0 ]; then
@@ -288,11 +296,26 @@ fi
 export AKS_CLUSTER_NAME="aks-${LOCAL_NAME}-${SUFFIX}"
 echo "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating AKS cluster..."
 # Create Azure Kubernetes Service cluster
-az aks create --tags "$TAGS" --name "$AKS_CLUSTER_NAME" --resource-group "$RESOURCE_GROUP" --enable-keda --enable-managed-identity \
- --assign-identity $managedIdentityResourceId --node-provisioning-mode Auto --network-plugin azure --network-plugin-mode overlay \
- --network-dataplane cilium --node-count "$AKS_NODE_COUNT" --enable-oidc-issuer --generate-ssh-keys \
- --attach-acr "$AZURE_CONTAINER_REGISTRY_NAME" --enable-addons monitoring --kubernetes-version "$K8sversion" \
- --node-resource-group "MC_${AKS_CLUSTER_NAME}_$(date '+%Y%m%d%H%M%S')" --tags $TAGS
+az aks create \
+--name "$AKS_CLUSTER_NAME" \
+--tags "$TAGS" \
+--resource-group "$RESOURCE_GROUP" \
+--generate-ssh-keys \
+--node-resource-group "MC_${AKS_CLUSTER_NAME}_$(date '+%Y%m%d%H%M%S')" \
+--enable-keda \
+--enable-managed-identity \
+--enable-workload-identity \
+--assign-identity $managedIdentityResourceId \
+--node-provisioning-mode Auto \
+--network-plugin azure \
+--network-plugin-mode overlay \
+--network-dataplane cilium \
+--node-count "$AKS_NODE_COUNT" \
+--enable-oidc-issuer \
+--attach-acr "$AZURE_CONTAINER_REGISTRY_NAME" \
+--enable-addons monitoring \
+--kubernetes-version "$K8sversion" \
+
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster $AKS_CLUSTER_NAME created successfully." ${NC}
 else
@@ -350,12 +373,19 @@ fi
 # Now the cluster is finally created
 echo "AKS_CLUSTER_NAME=${AKS_CLUSTER_NAME}" >>./deployment/deploy.state
 
-
 # Get AKS cluster credentials
 az aks get-credentials --name "${AKS_CLUSTER_NAME}" --resource-group "${RESOURCE_GROUP}"
 if [ $? -ne 0 ]; then
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster credentials retrieval failed." ${NC}
     exit 1
+fi
+
+#Check is the namespace already exists
+if kubectl get namespace $AQS_TARGET_NAMESPACE &>/dev/null; then
+    echo "Namespace $AQS_TARGET_NAMESPACE already exists"
+else
+    echo "Creating namespace $AQS_TARGET_NAMESPACE"
+    kubectl create namespace $AQS_TARGET_NAMESPACE
 fi
 
 # Create a separate managed identity for the AKS workload identity
@@ -371,16 +401,8 @@ fi
 echo "WORKLOAD_MANAGED_IDENTITY_NAME=${WORKLOAD_MANAGED_IDENTITY_NAME}" >>./deployment/deploy.state
 
 workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
-workloadManagedIdentityResourceId=$(echo "$workloadManagedIdentityResourceId" | jq -r '.id')
-workloadManagedIdentityClientId=$(az identity show --ids "$managedIdentityResourceId" --query clientId --output tsv)
-
-#Check is the namespace already exists
-if kubectl get namespace $AQS_TARGET_NAMESPACE &>/dev/null; then
-    echo "Namespace $AQS_TARGET_NAMESPACE already exists"
-else
-    echo "Creating namespace $AQS_TARGET_NAMESPACE"
-    kubectl create namespace $AQS_TARGET_NAMESPACE
-fi
+workloadManagedIdentityResourceId=$(echo "$workloadManagedIdentity" | jq -r '.id')
+workloadManagedIdentityClientId=$( echo "$workloadManagedIdentity" | jq -r '.clientId')
 
 # Create and annotate the service account
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating service account ${SERVICE_ACCOUNT}" ${NC}
@@ -391,6 +413,8 @@ else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Service account $SERVICE_ACCOUNT creation failed." ${NC}
     exit 1
 fi
+echo "SERVICE_ACCOUNT=${SERVICE_ACCOUNT}" >>./deployment/deploy.state
+
 # This is required to associate the managed identity with the service account
 kubectl annotate serviceaccount "$SERVICE_ACCOUNT" -n "$AQS_TARGET_NAMESPACE" "azure.workload.identity/client-id=$workloadManagedIdentityClientId"
 if [ $? -eq 0 ]; then
@@ -403,18 +427,26 @@ fi
 
 # Check if the federated identity credential already exists and if not create it and associate it to the managed identity
 export FEDERATED_IDENTITY_CREDENTIAL_NAME="federated-credential-${SUFFIX}"
-if ! az identity credential show --name "$FEDERATED_IDENTITY_CREDENTIAL_NAME" --resource-group "$RESOURCE_GROUP" --identity "$workloadManagedIdentityResourceId" &>/dev/null && ! az identity federated-credential show --name "$FEDERATED_IDENTITY_CREDENTIAL_NAME" --identity-name "$WORKLOAD_MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-    AKS_OIDC_ISSUER=$(az aks show --name $AKS_CLUSTER_NAME --resource-group "$RESOURCE_GROUP" --query "oidcIssuerProfile.issuerUrl" -otsv)
-    # Create the federated identity credential
-    az identity federated-credential create --name ${FEDERATED_IDENTITY_CREDENTIAL_NAME} --identity-name ${WORKLOAD_MANAGED_IDENTITY_NAME} --resource-group "$RESOURCE_GROUP" --issuer ${AKS_OIDC_ISSUER} --subject system=serviceaccount=${AQS_TARGET_NAMESPACE}=${SERVICE_ACCOUNT}
-    if [ $? -eq 0 ]; then
-        echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential '$FEDERATED_IDENTITY_CREDENTIAL_NAME' created successfully and associated with the workload identity managed identity." ${NC}
-    else
-        echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential '$FEDERATED_IDENTITY_CREDENTIAL_NAME' creation failed." ${NC}
-        exit 1
-    fi
+
+# Retrieve the OIDC issuer URL for the AKS cluster
+export AKS_OIDC_ISSUER=$(az aks show --name $AKS_CLUSTER_NAME \
+--resource-group "$RESOURCE_GROUP" \
+--query "oidcIssuerProfile.issuerUrl" \
+-o tsv)
+
+# Create the federated identity credential
+az identity federated-credential create \
+--name ${FEDERATED_IDENTITY_CREDENTIAL_NAME} \
+--identity-name ${WORKLOAD_MANAGED_IDENTITY_NAME} \
+--resource-group "$RESOURCE_GROUP" \
+--issuer ${AKS_OIDC_ISSUER} \
+--subject system:serviceaccount:${AQS_TARGET_NAMESPACE}:${SERVICE_ACCOUNT}
+
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential '$FEDERATED_IDENTITY_CREDENTIAL_NAME' created successfully and associated with the workload identity managed identity." ${NC}
 else
-    echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') The federated identity credential '$FEDERATED_IDENTITY_CREDENTIAL_NAME' already exists and is associated with the workload identity managed identity."
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential '$FEDERATED_IDENTITY_CREDENTIAL_NAME' creation failed." ${NC}
+    exit 1
 fi
 echo "FEDERATED_IDENTITY_CREDENTIAL_NAME=${FEDERATED_IDENTITY_CREDENTIAL_NAME}" >>./deployment/deploy.state
 
@@ -450,17 +482,36 @@ echo "FEDERATED_IDENTITY_CREDENTIAL_NAME=${FEDERATED_IDENTITY_CREDENTIAL_NAME}" 
 
 
 # Setup RBAC data plane access to Azure Storage and Azure Cosmos DB for the workload identity
-# Grant Storage Blob Data Contributor role to the managed identity for the storage account
-workloadManagedIdentity=$(az identity show --name "$WORKLOAD_MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --output json) 
-workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
+# Grant Storage Queue Blob Data Contributor role to the managed identity for the storage account
+# workloadManagedIdentity=$(az identity show --name "$WORKLOAD_MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --output json) 
+# workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
 storageAccountResourceId=$(az storage account show --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$STORAGE_RG_NAME" --query "id" --output tsv)
-roleAssignment=$(az role assignment list --assignee "$workloadManagedIdentityObjectId" --scope "$storageAccountResourceId" --query "[?roleDefinitionName=='Storage Blob Data Contributor']" --output json)
-if [ -z "$roleAssignment" ]; then
-    az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Blob Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
-else
-    echo "The workload managed identity with object ID $workloadManagedIdentityObjectId already has the 'Storage Blob Data Contributor' role assigned to the storage account."
+
+# Just assign the role to the managed identity
+#
+# roleAssignment=$(az role assignment list --assignee "$workloadManagedIdentityObjectId" --scope "$storageAccountResourceId" --query "[?roleDefinitionName=='Storage Queue Data Contributor']" --output json)
+# if [ -z "$roleAssignment" ]; then
+#     az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Queue Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
+# else
+#     echo "The workload managed identity with object ID $workloadManagedIdentityObjectId already has the 'Storage QUeue Data Contributor' role assigned to the storage account."
+# fi
+
+az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Queue Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Queue Data Contributor role to workload identity" ${NC}
+else 
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Queue Data Contributor role to workload identity." ${NC}
+    exit 1
 fi
 
+az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Table Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Table Data Contributor role to workload identity" ${NC}
+else 
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Table Data Contributor role to workload identity." ${NC}
+    exit 1
+fi
+#
 # Grant Cosmos DB Account Contributor role to the managed identity for the Cosmos DB account
 # cosmosdbAccountResourceId=$(az cosmosdb show --name "${COSMOSDB_ACCOUNT_NAME}" --resource-group "$RESOURCE_GROUP" --query "id" --output tsv)
 # workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
