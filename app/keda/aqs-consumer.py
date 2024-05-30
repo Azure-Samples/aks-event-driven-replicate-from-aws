@@ -51,6 +51,8 @@ def receive_message():
         print (f'Receipt handle: {receipt_handle}')
 
         save_data(message_body)
+        # dequeue the message
+        aqs_client.delete_message(response, receipt_handle)
         print("End fn receive message")
     except Exception as ex:
         print(f"Error happened in receive_message : {ex} ")
