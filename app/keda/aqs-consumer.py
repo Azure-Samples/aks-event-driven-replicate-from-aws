@@ -11,20 +11,20 @@ from azure.identity import DefaultAzureCredential
 
 def check_env():
     if 'AZURE_STORAGE_ACCOUNT_NAME' in os.environ:
-        conn_str = os.environ['AZURE_STORAGE_ACCOUNT_NAME']
-        print ('Connection string set from envars')
+        storage_account_name = os.environ['AZURE_STORAGE_ACCOUNT_NAME']
+        print (f'Storage accout name {storage_account_name} set from envars')
     else:
         raise ValueError('Environment variable AZURE_STORAGE_ACCOUNT_NAME is missing!')
 
     if 'AZURE_QUEUE_NAME' in os.environ:
         queue_name = os.environ['AZURE_QUEUE_NAME']
-        print ('Queue name is set from envars')
+        print (f'Queue name {queue_name} is set from envars')
     else:
         raise ValueError ('Environment variable AZURE_QUEUE_NAME is missing!')
 
     if 'AZURE_COSMOSDB_ACCOUNT_NAME' in os.environ:
-        cosmos_conn_string = os.environ['AZURE_COSMOSDB_ACCOUNT_NAME']
-        print ('Cosmos connection string set from envars')
+        cosmos_account_name = os.environ['AZURE_COSMOSDB_ACCOUNT_NAME']
+        print ('Cosmos account name set from envars')
     else:
         raise ValueError('Environment variable AZURE_COSMOSDB_ACCOUNT_NAME is missing')
 
@@ -33,7 +33,7 @@ def check_env():
     else:
         cosmosdb_table = os.environ['AZURE_COSMOSDB_TABLE']
         print (f'CosmosDB table name {cosmosdb_table}')
-    return conn_str, queue_name, cosmos_conn_string, cosmosdb_table
+    return storage_account_name, queue_name, cosmos_account_name, cosmosdb_table
 
 def receive_message():
     try:
@@ -63,7 +63,6 @@ def save_data(_message):
     print(f'Src Message :{jsonMessage["msg"]},{jsonMessage["srcStamp"]}')
 
     date_format = '%Y-%m-%d %H:%M:%S.%f'
-    #current_dateTime = json.dumps(datetime.now(),default= str)
     current_dateTime = datetime.utcnow().strftime(date_format)
 
     _id = str(uuid.uuid1())
@@ -79,7 +78,6 @@ def save_data(_message):
 
     entity={
         'PartitionKey': _id,
-        #'RowKey': str(messageProcessingTime.total_seconds()),
         'RowKey': datetime.utcnow().strftime(date_format),
         'data': jsonMessage['msg'],
         'srcStamp': jsonMessage['srcStamp'],
@@ -88,7 +86,6 @@ def save_data(_message):
     
     response = table.create_entity(entity=entity)
     print (f"insert_entity response timestamp {str(response)}")
-
 
 try:
     # create a function to add numbers
