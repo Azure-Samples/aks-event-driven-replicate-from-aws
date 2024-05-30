@@ -41,7 +41,7 @@ if (
             date_format = "%Y-%m-%d %H:%M:%S.%f"
             current_dateTime = datetime.utcnow().strftime(date_format)
             messageBody = {
-                "msg": f"Scale Buddy !!! : COUNT {i}",
+                "msg": f"Scale Test Message : COUNT {i}",
                 "srcStamp": current_dateTime,
             }
             print(json.dumps(messageBody))
