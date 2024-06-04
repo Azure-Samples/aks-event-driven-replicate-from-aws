@@ -434,7 +434,7 @@ export AKS_OIDC_ISSUER=$(az aks show --name $AKS_CLUSTER_NAME \
 --query "oidcIssuerProfile.issuerUrl" \
 -o tsv)
 
-# Create the federated identity credential
+# Create the federated identity credential for the workload (pod) identity
 az identity federated-credential create \
 --name ${FEDERATED_IDENTITY_CREDENTIAL_NAME} \
 --identity-name ${WORKLOAD_MANAGED_IDENTITY_NAME} \
@@ -449,6 +449,23 @@ else
     exit 1
 fi
 echo "FEDERATED_IDENTITY_CREDENTIAL_NAME=${FEDERATED_IDENTITY_CREDENTIAL_NAME}" >>./deployment/deploy.state
+
+# Now create a second federeated credential for the KEDA service account
+export KEDA_SERVICE_ACCT_CRED_NAME="fed-cred-${LOCAL_NAME}-kedasvc-${SUFFIX}"
+az identity federated-credential create \
+--name $KEDA_SERVICE_ACCT_CRED_NAME \
+--identity-name ${WORKLOAD_MANAGED_IDENTITY_NAME} \
+--resource-group "$RESOURCE_GROUP" \
+--issuer ${AKS_OIDC_ISSUER} \
+--subject system:serviceaccount:kube-system:keda-operator
+
+if [ $? -eq 0 ]; then
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential for keda service account 'fed-cred-${LOCAL_NAME}-kedasvc-${SUFFIX}' created successfully and associated with the workload identity managed identity." ${NC}
+else
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Federated identity credential for keda service account 'fed-cred-${LOCAL_NAME}-kedasvc-${SUFFIX}' creation failed." ${NC}
+    exit 1
+fi
+echo "KEDA_SERVICE_ACCT_CRED_NAME=${KEDA_SERVICE_ACCT_CRED_NAME}" >>./deployment/deploy.state
 
 # We're not going to use CosmosDB until the API issue is fixed
 # 
