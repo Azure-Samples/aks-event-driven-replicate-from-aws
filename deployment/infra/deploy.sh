@@ -31,13 +31,12 @@ source ./deployment/environmentVariables.sh
 # - COSMOSDB_DATABASE_NAME= The name of the Azure Cosmos DB database
 # - COSMOSDB_CONTAINER_NAME= The name of the Azure Cosmos DB container
 
-# Create a state for the deployment -- so we can clean it up later
+# Create a state for the deployment -- usefule when we deploy the app and for clean up later
 if [ -f ./deployment/deploy.state ]; then
     echo ${YELLOW} "Detected a deployment state file. Overwriting..."
     rm -f ./deployment/deploy.state
 fi
 
-# Testing remove this later
 # Use this suffix on the storage account name if a new storage account is created
 export SUFFIX=$(
     tr -dc A-Za-z0-9 </dev/urandom | head -c 6
@@ -151,81 +150,6 @@ else
 fi
 echo "AZURE_COSMOSDB_TABLE=${AZURE_COSMOSDB_TABLE}" >>./deployment/deploy.state
 
-# Shouldn't need this part since we are using workload identity for accessing reseources.
-#
-# # Create Azure Key Vault
-# export KEY_VAULT_NAME="kv-aksdemo-${SUFFIX}"
-# keyVaultResourceId=$(az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$RESOURCE_GROUP" --query id --output tsv)
-# if [ -z "$keyVaultResourceId" ]; then
-#     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating Azure Key Vault ${KEY_VAULT_NAME} in resource group ${KEYVAULT_RG_NAME}" ${NC}
-#     az keyvault create --name "$KEY_VAULT_NAME" --resource-group "$RESOURCE_GROUP" --location "$LOCATION" --enable-rbac-authorization true
-#     if [ $? -eq 0 ]; then
-#         echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Key vault $KEY_VAULT_NAME created successfully." ${NC}
-#    
-#     else
-#         echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Key vault $KEY_VAULT_NAME creation failed." ${NC}
-#         exit 1
-#     fi
-# else
-#     echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Key vault $KEY_VAULT_NAME already exists."
-# fi
-# echo "KEY_VAULT_NAME=${KEY_VAULT_NAME}" >>./deployment/deploy.state
-# keyVaultResourceId=$(az keyvault show --name "$KEY_VAULT_NAME" --resource-group "$RESOURCE_GROUP" --query id --output tsv)
-#
-# # Assign Key Vault Administrator role to the object id of the principal running the script.
-# # This is required to create secrets in the key vault.
-# if az account show --query "user.type" --output tsv | grep -q "servicePrincipal"; then
-#     principalObjectId=$(az ad sp show --id $(az account show --query "user.name" --output tsv) --query id --output tsv)
-#     principalType="ServicePrincipal"
-# elif az account show --query "user.type" --output tsv | grep -q "managedIdentity"; then
-#     principalObjectId=$(az ad sp show --id $(az account show --query "user.name" --output tsv) --query id --output tsv)
-#     principalType="ServicePrincipal"
-# else
-#     principalObjectId=$(az ad signed-in-user show --query id --output tsv)
-#     principalType="User"
-# fi
-
-# roleAssignment=$(az role assignment list --assignee "$principalObjectId" --scope $keyVaultResourceId --query "[?roleDefinitionName=='Key Vault Administrator']" --output json)
-# if [ -z "$roleAssignment" ]; then
-#     az role assignment create --assignee-object-id $principalObjectId --role "Key Vault Administrator" --scope $keyVaultResourceId --assignee-principal-type $principalType
-
-#     # Validate role assignment propagation and wait if not propagated
-#     roleAssignmentValidated=false
-#     maxWaitTime=60
-#     currentWaitTime=0
-
-#     while [ $currentWaitTime -lt $maxWaitTime ]; do
-#         roleAssignment=$(az role assignment list --assignee "$principalObjectId" --scope $keyVaultResourceId --query "[?roleDefinitionName=='Key Vault Administrator']" --output json)
-
-#         if [ -n "$roleAssignment" ]; then
-#             roleAssignmentValidated=true
-#             break
-#         else
-#             sleep 5
-#             currentWaitTime=$((currentWaitTime + 5))
-#         fi
-#     done
-#     #TODO - Save role assignment to deployment state file
-# else
-#     echo ${YELLOW} "The principal with object ID $principalObjectId is already assigned the 'Key Vault Administrator' role to the key vault." ${NC}
-# fi
-
-# Shouldn't need this part since we are using workload identity for accessing reseources.
-#
-# Check if Storage Account PrimaryAccessKey secret exists in the key vault
-# if ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$AZURE_STORAGE_ACCOUNT_NAME-PrimaryAccessKey" &>/dev/null && ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$AZURE_STORAGE_ACCOUNT_NAME-SecondaryAccessKey" &>/dev/null; then
-#     # Extract primary and secondary storage account keys
-#     storageAccountKeys=$(az storage account keys list --account-name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$STORAGE_RG_NAME" --output json)
-#     primaryAccessKey=$(echo "$storageAccountKeys" | jq -r '.[0].value')
-#     secondaryAccessKey=$(echo "$storageAccountKeys" | jq -r '.[1].value')
-
-#     # Create secrets in the key vault for accessing the storage account
-#     az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$AZURE_STORAGE_ACCOUNT_NAME-PrimaryAccessKey" --value "$primaryAccessKey"
-#     az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name "$AZURE_STORAGE_ACCOUNT_NAME-SecondaryAccessKey" --value "$secondaryAccessKey"
-# else
-#     echo "Secrets 'PrimaryAccessKey' and 'SecondaryAccessKey' already exist in the key vault."
-# fi
-
 # Create Azure Container Registry
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating Azure Container Registry" ${NC}
 export AZURE_CONTAINER_REGISTRY_NAME="acr${LOCAL_NAME,,}${SUFFIX,,}"
@@ -239,16 +163,6 @@ fi
 
 acrResourceId=$(az acr show --name "$AZURE_CONTAINER_REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query "id" --output tsv)
 echo "AZURE_CONTAINER_REGISTRY_NAME=${AZURE_CONTAINER_REGISTRY_NAME}" >>./deployment/deploy.state
-
-# Shouldn't need this because we are going to connect the ACR to the AKS cluster using managed identity
-#
-# Check if the keyvault contains the service principal id
-# and password for the Azure Container Registry. If they are missing, create them.
-# if ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$AZURE_CONTAINER_REGISTRY_NAME-service-principal-id" &>/dev/null && ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$AZURE_CONTAINER_REGISTRY_NAME-sp-secret" &>/dev/null; then
-#     ./deployment/cluster/create-acr-sp.sh "$AZURE_CONTAINER_REGISTRY_NAME" "$KEY_VAULT_NAME"
-# else
-#     echo "Secrets 'service-principal-id' and 'sp-secret' already exist in the key vault."
-# fi
 
 # Create User Assigned Managed Identity for the AKS cluster identity
 export AKS_MANAGED_IDENTITY_NAME="mi-${LOCAL_NAME}-${SUFFIX}"
@@ -268,20 +182,6 @@ echo "AKS_MANAGED_IDENTITY_NAME=${AKS_MANAGED_IDENTITY_NAME}" >>./deployment/dep
 
 managedIdentityObjectId=$(echo "$managedIdentity" | jq -r '.principalId')
 managedIdentityResourceId=$(echo "$managedIdentity" | jq -r '.id')
-
-# Shouldn't need this because we are going to connect the ACR to the AKS cluster using managed identity
-#
-# Assign AcrPull role to the User Assigned Managed Identity for the Azure Container Registry
-# roleAssignment=$(az role assignment list --assignee "$managedIdentityObjectId" --scope "$acrResourceId" --query "[?roleDefinitionName=='AcrPull']" --output json)
-# if [ -z "$roleAssignment" ]; then
-#     az role assignment create --assignee-object-id "$managedIdentityObjectId" --role "AcrPull" --scope "$acrResourceId" --assignee-principal-type ServicePrincipal
-# else
-#     echo "The managed identity with object ID $managedIdentityObjectId already has the 'AcrPull' role assigned to the Azure Container Registry."
-# fi
-
-# Grant the managed identity access to the ACR -- using assignee-principal-type and assignee-object-id to avoid calling the Grpah API
-# acrResourceId=$(az acr show --name "$AZURE_CONTAINER_REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query "id" --output tsv)
-
 
 # Grant the managed identity access to the ACR
 az role assignment create --assignee-object-id "$managedIdentityObjectId" --assignee-principal-type "ServicePrincipal" --role acrpull --scope "$acrResourceId"
@@ -467,52 +367,11 @@ else
 fi
 echo "KEDA_SERVICE_ACCT_CRED_NAME=${KEDA_SERVICE_ACCT_CRED_NAME}" >>./deployment/deploy.state
 
-# We're not going to use CosmosDB until the API issue is fixed
-# 
-#export COSMOSDB_ACCOUNT_NAME="cosmosdb-${LOCAL_NAME,,}-${SUFFIX,,}"
-# Check if Azure Cosmos DB account already exists
-# if ! az cosmosdb show --name "${COSMOSDB_ACCOUNT_NAME}" --resource-group "${RESOURCE_GROUP}" &>/dev/null; then
-#     # Create Azure Cosmos DB account
-#     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating Azure Cosmos DB account ${COSMOSDB_ACCOUNT_NAME} in resource group ${RESOURCE_GROUP}"  ${NC}
-#     az cosmosdb create --name "${COSMOSDB_ACCOUNT_NAME}" --resource-group "${RESOURCE_GROUP}" \
-#     --default-consistency-level Eventual --locations regionName="${LOCATION}" \
-#     failoverPriority=0 isZoneRedundant=False --capabilities EnableServerless EnableTable
-
-#     az cosmosdb table exists --account-name "${COSMOSDB_ACCOUNT_NAME}" --name "${AZURE_COSMOSDB_TABLE}" --resource-group "${RESOURCE_GROUP}"
-#     if [ $? -eq 0 ]; then
-#         # Create Azure Cosmos DB database
-#         az cosmosdb table create --account-name "${COSMOSDB_ACCOUNT_NAME}" --resource-group "$RESOURCE_GROUP" --name "${AZURE_COSMOSDB_TABLE}"
-#         if [ $? -eq 0 ]; then
-#             echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Azure Cosmos DB table '${AZURE_COSMOSDB_TABLE}' created successfully." ${NC}
-#         else
-#             echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Azure Cosmos DB table '${AZURE_COSMOSDB_TABLE}' creation failed." ${NC}
-#             exit 1
-#         fi
-#     else
-#         echo "Azure Cosmos DB database '$AZURE_COSMOSDB_TABLE' already exists."
-#     fi
-# else
-#     echo "Azure Cosmos DB account '${COSMOSDB_ACCOUNT_NAME}' already exists."
-# fi
-# echo "AZURE_COSMOSDB_TABLE=${AZURE_COSMOSDB_TABLE}" >>./deployment/deploy.state
-# echo "COSMOSDB_ACCOUNT_NAME=${COSMOSDB_ACCOUNT_NAME}" >>./deployment/deploy.state
-
-
 # Setup RBAC data plane access to Azure Storage and Azure Cosmos DB for the workload identity
 # Grant Storage Queue Blob Data Contributor role to the managed identity for the storage account
-# workloadManagedIdentity=$(az identity show --name "$WORKLOAD_MANAGED_IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --output json) 
-# workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
 storageAccountResourceId=$(az storage account show --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$STORAGE_RG_NAME" --query "id" --output tsv)
 
-# Just assign the role to the managed identity
-#
-# roleAssignment=$(az role assignment list --assignee "$workloadManagedIdentityObjectId" --scope "$storageAccountResourceId" --query "[?roleDefinitionName=='Storage Queue Data Contributor']" --output json)
-# if [ -z "$roleAssignment" ]; then
-#     az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Queue Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
-# else
-#     echo "The workload managed identity with object ID $workloadManagedIdentityObjectId already has the 'Storage QUeue Data Contributor' role assigned to the storage account."
-# fi
-
+# Assign the Storage Queue Data Contributor role to the workload identity for the storage account
 az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Queue Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Queue Data Contributor role to workload identity" ${NC}
@@ -521,6 +380,7 @@ else
     exit 1
 fi
 
+# Assign the Storage Table Data Contributor role to the workload identity for the storage account
 az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Table Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Table Data Contributor role to workload identity" ${NC}
@@ -528,15 +388,5 @@ else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Table Data Contributor role to workload identity." ${NC}
     exit 1
 fi
-#
-# Grant Cosmos DB Account Contributor role to the managed identity for the Cosmos DB account
-# cosmosdbAccountResourceId=$(az cosmosdb show --name "${COSMOSDB_ACCOUNT_NAME}" --resource-group "$RESOURCE_GROUP" --query "id" --output tsv)
-# workloadManagedIdentityObjectId=$(echo "$workloadManagedIdentity" | jq -r '.principalId')
-# roleAssignment=$(az role assignment list --assignee "$workloadManagedIdentityObjectId" --scope "$cosmosdbAccountResourceId" --query "[?roleDefinitionName=='DocumentDB Account Contributor']" --output json)
-# if [ -z "$roleAssignment" ]; then
-#     az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "DocumentDB Account Contributor" --scope "$cosmosdbAccountResourceId" --assignee-principal-type ServicePrincipal
-# else
-#     echo "The workload managed identity with object ID $workloadManagedIdentityObjectId already has the 'DocumentDB Account Contributor' role assigned to the Cosmos DB account."
-# fi
 
 echo "Deployment completed successfully."
