@@ -2,7 +2,6 @@
 echo "Setting environment variables"
 
 #K8s Variables
-export CLUSTER_NAME="aks-cluster"
 export K8sversion="1.28"
 
 #Karpenter Variables
