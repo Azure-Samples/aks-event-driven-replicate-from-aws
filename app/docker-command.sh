@@ -4,6 +4,16 @@
 # and push it to the Azure Container Registry.
 #
 # Usage: ./docker-command.sh  Run this script from the root of the project directory
+#
+
+. ./deployment/environmentVariables.sh
+
+# Set resource name environment variables based on the deployment state file
+while IFS= read -r line; do
+  echo "export $line";
+  export $line;
+done < ./deployment/deploy.state
+
 cd ./app/keda
 
 echo "Logging into Azure Container Registry"
