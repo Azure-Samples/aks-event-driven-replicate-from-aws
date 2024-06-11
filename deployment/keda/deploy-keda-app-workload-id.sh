@@ -63,10 +63,8 @@ spec:
           value: $AZURE_QUEUE_NAME
         - name: AZURE_STORAGE_ACCOUNT_NAME
           value: $AZURE_STORAGE_ACCOUNT_NAME
-        - name: AZURE_COSMOSDB_TABLE
-          value: $AZURE_COSMOSDB_TABLE
-        - name: AZURE_COSMOSDB_ACCOUNT_NAME
-          value: $AZURE_COSMOSDB_ACCOUNT_NAME
+        - name: AZURE_TABLE_NAME
+          value: $AZURE_TABLE_NAME
         resources:
           requests:
             memory: "64Mi"

@@ -22,18 +22,12 @@ def check_env():
     else:
         raise ValueError ('Environment variable AZURE_QUEUE_NAME is missing!')
 
-    if 'AZURE_COSMOSDB_ACCOUNT_NAME' in os.environ:
-        cosmos_account_name = os.environ['AZURE_COSMOSDB_ACCOUNT_NAME']
-        print ('Cosmos account name set from envars')
+    if 'AZURE_TABLE_NAME' not in os.environ:
+        raise ValueError('Environment variable AZURE_TABLE_NAME is missing!')
     else:
-        raise ValueError('Environment variable AZURE_COSMOSDB_ACCOUNT_NAME is missing')
-
-    if 'AZURE_COSMOSDB_TABLE' not in os.environ:
-        raise ValueError('Environment variable AZURE_COSMOSDB_TABLE is missing!')
-    else:
-        cosmosdb_table = os.environ['AZURE_COSMOSDB_TABLE']
-        print (f'CosmosDB table name {cosmosdb_table}')
-    return storage_account_name, queue_name, cosmos_account_name, cosmosdb_table
+        cosmosdb_table = os.environ['AZURE_TABLE_NAME']
+        print (f'Azure table name {cosmosdb_table}')
+    return storage_account_name, queue_name, cosmosdb_table
 
 def receive_message():
     try:
