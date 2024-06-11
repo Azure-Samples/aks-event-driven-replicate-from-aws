@@ -1,16 +1,13 @@
 #!/bin/bash
 
 # Load environment variables
-#. ./deployment/environmentVariables.sh
+. ./deployment/environmentVariables.sh
 
-# echo color
-RED=$(tput setaf 1)
-GREEN=$(tput setaf 2)
-CYAN=$(tput setaf 6)
-BLUE=$(tput setaf 4)
-YELLOW=$(tput setaf 3)
-MAGENTA=$(tput setaf 5)
-NC=$(tput sgr0)
+# Set resource name environment variables based on the deployment state file
+while IFS= read -r line; do
+  echo "export $line";
+  export $line;
+done < ./deployment/deploy.state
 
 echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Get AKS cluster credentials" ${NC}
 az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME

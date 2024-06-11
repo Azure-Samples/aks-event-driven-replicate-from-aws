@@ -6,7 +6,13 @@
 #*************************
 
 # Load environment variables
-#. ./deployment/environmentVariables.sh
+. ./deployment/environmentVariables.sh
+
+# Set resource name environment variables based on the deployment state file
+while IFS= read -r line; do
+  echo "export $line";
+  export $line;
+done < ./deployment/deploy.state
 
 echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') Get AKS cluster credentials" ${NC}
 az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME
@@ -57,10 +63,8 @@ spec:
           value: $AZURE_QUEUE_NAME
         - name: AZURE_STORAGE_ACCOUNT_NAME
           value: $AZURE_STORAGE_ACCOUNT_NAME
-        - name: AZURE_COSMOSDB_TABLE
-          value: $AZURE_COSMOSDB_TABLE
-        - name: AZURE_COSMOSDB_ACCOUNT_NAME
-          value: $AZURE_COSMOSDB_ACCOUNT_NAME
+        - name: AZURE_TABLE_NAME
+          value: $AZURE_TABLE_NAME
         resources:
           requests:
             memory: "64Mi"
