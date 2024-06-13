@@ -25,9 +25,9 @@ def check_env():
     if 'AZURE_TABLE_NAME' not in os.environ:
         raise ValueError('Environment variable AZURE_TABLE_NAME is missing!')
     else:
-        cosmosdb_table = os.environ['AZURE_TABLE_NAME']
-        print (f'Azure table name {cosmosdb_table}')
-    return storage_account_name, queue_name, cosmosdb_table
+        azure_table = os.environ['AZURE_TABLE_NAME']
+        print (f'Azure table name {azure_table}')
+    return storage_account_name, queue_name, azure_table
 
 def receive_message():
     try:
@@ -67,7 +67,7 @@ def save_data(_message):
     creds = DefaultAzureCredential()
     table = TableServiceClient(
         endpoint=f"https://{storage_account_name}.table.core.windows.net/",  
-        credential=creds).get_table_client(table_name=cosmosdb_table)
+        credential=creds).get_table_client(table_name=azure_table)
     
     messageProcessingTime = datetime.utcnow() - datetime.strptime(jsonMessage["srcStamp"],date_format) 
     print(f'messageProcessingTime: {messageProcessingTime.total_seconds()}')
@@ -86,7 +86,7 @@ def save_data(_message):
 try:
     # create a function to add numbers
     starttime = time.time()
-    storage_account_name, queue_name, cosmosdb_account_name, cosmosdb_table = check_env()
+    storage_account_name, queue_name, cosmosdb_account_name, azure_table = check_env()
 
     while True:
         t = time.localtime()
