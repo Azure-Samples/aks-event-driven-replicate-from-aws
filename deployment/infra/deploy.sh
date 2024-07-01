@@ -39,7 +39,7 @@ fi
 
 # Use this suffix on the storage account name if a new storage account is created
 export SUFFIX=$(
-    tr -dc A-Za-z0-9 </dev/urandom | head -c 6
+    tr -dc a-z0-9 </dev/urandom | head -c 6
     echo
 )
 # Save the suffix to the deployment state file
@@ -111,7 +111,7 @@ fi
 echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >>./deployment/deploy.state
 
 # Generate storage account
-export AZURE_STORAGE_ACCOUNT_NAME="storaksdemo${SUFFIX,,}"
+export AZURE_STORAGE_ACCOUNT_NAME="storaksdemo${SUFFIX}"
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating storage account $AZURE_STORAGE_ACCOUNT_NAME in resource group $RESOURCE_GROUP" ${NC}
 if ! az storage account show --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
     # Generate storage account
@@ -152,7 +152,7 @@ echo "AZURE_COSMOSDB_TABLE=${AZURE_COSMOSDB_TABLE}" >>./deployment/deploy.state
 
 # Create Azure Container Registry
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating Azure Container Registry" ${NC}
-export AZURE_CONTAINER_REGISTRY_NAME="acr${LOCAL_NAME,,}${SUFFIX,,}"
+export AZURE_CONTAINER_REGISTRY_NAME="acr$(echo ${LOCAL_NAME} | tr '[:upper:]' '[:lower:]')${SUFFIX}"
 az acr create --name "$AZURE_CONTAINER_REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --sku "$ACR_SKU" --query "id" --output tsv
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Azure Container Registry $AZURE_CONTAINER_REGISTRY_NAME created successfully." ${NC}
