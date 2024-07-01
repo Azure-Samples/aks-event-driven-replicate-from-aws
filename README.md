@@ -33,7 +33,11 @@ Aside from the prerequisites, there is nothing else you need to install to run t
 
 #### Deploy the Infrastructure
 
-The first step of the workshop is to deploy the AKS cluster and the supporting infrastructure. The main infrastructure deployment script is located in the deployment/infra directory. The deployment script `deploy.sh` is run from the project root directory.
+The first step of the workshop is to deploy the AKS cluster and the supporting infrastructure. The main infrastructure deployment script is located in the `deployment/infra` directory.
+Review the `deployment/environmentVariables.sh` file, you must set at least the storage account name, and
+you must set a unique value across all Azure customers, because the name is used as a DNS record.
+
+The deployment script `deploy.sh` is run from the project root directory.
 
 ```bash
 ./deployment/infra/deploy.sh
@@ -45,7 +49,7 @@ The deployment script also creates a file, `deploy.state` in the deployment dire
 
 #### Populate the Message Queue
 
-The next step is to populate the message queue with messages. The message queue is an Azure Storage Queue. In the `app/keda` directory you will find the `aqs-producer.py` Python app. Before running the app, you will need to: 
+The next step is to populate the message queue with messages. The message queue is an Azure Storage Queue. In the `app/keda` directory you will find the `aqs-producer.py` Python app. Before running the app, you will need to:
 
 1. Set the environment variables for the storage account name. The code for the producer and consumer apps have already been modified to use the [Azure SDK for Python](https://learn.microsoft.com/en-us/azure/developer/python/sdk/azure-sdk-overview). Use the `deployment/deploy.state` file to set the environment variables you will need to run the producer app.
 
