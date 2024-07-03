@@ -16,6 +16,7 @@ export AQS_TARGET_NAMESPACE="aqs-demo"
 #****************** ADD VALUES FOR THE FOLLOWING ENVIROMENT VARIABLES ***********************
 export AZURE_QUEUE_NAME="aws2azmsgs"
 export AZURE_TABLE_NAME="aws2azpmts"
+export AZURE_COSMOSDB_TABLE="aws2azpmts"
 #********************************************************************************************
 export LOCAL_NAME="aksdemo"
 export LOCATION="westus"
