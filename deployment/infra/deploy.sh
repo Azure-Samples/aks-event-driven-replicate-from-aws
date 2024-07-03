@@ -83,8 +83,8 @@ if az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProv
             exit 1
         fi
 
-        status=$(az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | LC_ALL=C tr '[=upper=]' '[=lower=]')
-        if [ "$(echo "$status" | LC_ALL=C tr '[=upper=]' '[=lower=]')" = "registered" ]; then
+        status=$(az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | tr '[=upper=]' '[=lower=]')
+        if [ "$(echo "$status" | tr '[=upper=]' '[=lower=]')" = "registered" ]; then
             break
         else
             sleep 5
