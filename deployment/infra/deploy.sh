@@ -7,6 +7,14 @@ echo "$(date '+%Y-%m-%d %H:%M:%S%:z')  Starting deployment..."
 # make sure we have environment variables set
 source ./deployment/environmentVariables.sh
 
+# The script requires the following providers to be registered:
+# az provider register --namespace Microsoft.Storage
+# az provider register --namespace Microsoft.ContainerService
+# az provider register --namespace Microsoft.ContainerRegistry
+# az provider register --namespace Microsoft.Insights
+# az provider register --namespace Microsoft.ManagedIdentity
+
+
 #
 # IMPORTANT= Make sure to run ./deployment/environmentVariables.sh BEFORE running this script
 #
