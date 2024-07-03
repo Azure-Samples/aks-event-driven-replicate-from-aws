@@ -222,7 +222,7 @@ az aks create \
 --enable-oidc-issuer \
 --attach-acr "$AZURE_CONTAINER_REGISTRY_NAME" \
 --enable-addons monitoring \
---kubernetes-version "$K8sversion" \
+--kubernetes-version "$K8sversion"
 
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster $AKS_CLUSTER_NAME created successfully." ${NC}
