@@ -7,6 +7,14 @@ echo "$(date '+%Y-%m-%d %H:%M:%S%:z')  Starting deployment..."
 # make sure we have environment variables set
 source ./deployment/environmentVariables.sh
 
+# The script requires the following providers to be registered:
+# az provider register --namespace Microsoft.Storage
+# az provider register --namespace Microsoft.ContainerService
+# az provider register --namespace Microsoft.ContainerRegistry
+# az provider register --namespace Microsoft.Insights
+# az provider register --namespace Microsoft.ManagedIdentity
+
+
 #
 # IMPORTANT= Make sure to run ./deployment/environmentVariables.sh BEFORE running this script
 #
@@ -39,7 +47,7 @@ fi
 
 # Use this suffix on the storage account name if a new storage account is created
 export SUFFIX=$(
-    tr -dc a-z0-9 </dev/urandom | head -c 6
+    LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c 6
     echo
 )
 # Save the suffix to the deployment state file
@@ -67,7 +75,7 @@ if ! az extension show --name aks-preview &>/dev/null; then
 fi
 
 # Check if NodeAutoProvisioningPreview feature is already enabled
-if ! az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | grep -q "Registered"; then
+if az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | grep -q "NotRegistered"; then
     # Register the NodeAutoProvisioningPreview feature flag
     az feature register --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview"
 
@@ -100,10 +108,10 @@ fi
 export RESOURCE_GROUP="rg-aksdemo-${SUFFIX}"
 # Create a resource group
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --tags "$TAGS"
-if [ $? == 0 ]; then 
+if [ $? == 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Resource group $RESOURCE_GROUP created successfully." ${NC}
 
-else 
+else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Resource group $RESOURCE_GROUP creation failed." ${NC}
     exit 1
 
@@ -116,13 +124,13 @@ echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating storage account $AZURE_S
 if ! az storage account show --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
     # Generate storage account
     az storage account create --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --sku "$STORAGE_ACCOUNT_SKU"
-    if [ $? -eq 0 ]; then  
+    if [ $? -eq 0 ]; then
         echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage account $AZURE_STORAGE_ACCOUNT_NAME created successfully." ${NC}
-     
-    else 
+
+    else
         echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage account $AZURE_STORAGE_ACCOUNT_NAME creation failed." ${NC}
         exit 1
-    
+
     fi
 else
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage account $AZURE_STORAGE_ACCOUNT_NAME already exists."
@@ -187,7 +195,7 @@ managedIdentityResourceId=$(echo "$managedIdentity" | jq -r '.id')
 az role assignment create --assignee-object-id "$managedIdentityObjectId" --assignee-principal-type "ServicePrincipal" --role acrpull --scope "$acrResourceId"
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Managed identity $AKS_MANAGED_IDENTITY_NAME granted access to Azure Container Registry $AZURE_CONTAINER_REGISTRY_NAME." ${NC}
-else 
+else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to grant access to Azure Container Registry $AZURE_CONTAINER_REGISTRY_NAME for managed identity $AKS_MANAGED_IDENTITY_NAME." ${NC}
     exit 1
 fi
@@ -214,7 +222,7 @@ az aks create \
 --enable-oidc-issuer \
 --attach-acr "$AZURE_CONTAINER_REGISTRY_NAME" \
 --enable-addons monitoring \
---kubernetes-version "$K8sversion" \
+--kubernetes-version "$K8sversion"
 
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster $AKS_CLUSTER_NAME created successfully." ${NC}
@@ -223,7 +231,7 @@ else
     exit 1
 fi
 
-# Add a new system node pool to the AKS cluster 
+# Add a new system node pool to the AKS cluster
 # that is tainted so no application pods are scheduled on it
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Adding system node pool with taint to the AKS cluster..." ${NC}
 az aks nodepool add \
@@ -253,7 +261,7 @@ else
     exit 1
 fi
 
-# Add a new user node pool to the AKS cluster 
+# Add a new user node pool to the AKS cluster
 # only application pods are scheduled on it
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Adding application node pool with taint to the AKS cluster..." ${NC}
 az aks nodepool add \
@@ -375,7 +383,7 @@ storageAccountResourceId=$(az storage account show --name "$AZURE_STORAGE_ACCOUN
 az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Queue Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Queue Data Contributor role to workload identity" ${NC}
-else 
+else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Queue Data Contributor role to workload identity." ${NC}
     exit 1
 fi
@@ -384,7 +392,7 @@ fi
 az role assignment create --assignee-object-id "$workloadManagedIdentityObjectId" --role "Storage Table Data Contributor" --scope "$storageAccountResourceId" --assignee-principal-type ServicePrincipal
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Assigned Storage Table Data Contributor role to workload identity" ${NC}
-else 
+else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Table Data Contributor role to workload identity." ${NC}
     exit 1
 fi
