@@ -67,7 +67,7 @@ if ! az extension show --name aks-preview &>/dev/null; then
 fi
 
 # Check if NodeAutoProvisioningPreview feature is already enabled
-if ! az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | grep -q "Registered"; then
+if az feature show --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview" --subscription "$SUBSCRIPTION_ID" --query "properties.state" --output tsv | grep -q "NotRegistered"; then
     # Register the NodeAutoProvisioningPreview feature flag
     az feature register --namespace "Microsoft.ContainerService" --name "NodeAutoProvisioningPreview"
 
