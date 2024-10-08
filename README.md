@@ -33,9 +33,10 @@ Aside from the prerequisites, there is nothing else you need to install to run t
 
 #### Deploy the Infrastructure
 
-The first step of the workshop is to deploy the AKS cluster and the supporting infrastructure. The main infrastructure deployment script is located in the deployment/infra directory. The deployment script `deploy.sh` is run from the project root directory.
+The first step of the workshop is to deploy the AKS cluster and the supporting infrastructure. The main infrastructure deployment script is located in the deployment/infra directory. The deployment script `deploy.sh` is run from the project root directory. Make sure to change the permission of the script to make it executable.
 
 ```bash
+chmod +x ./deployment/infra/deploy.sh
 ./deployment/infra/deploy.sh
 ```
 
