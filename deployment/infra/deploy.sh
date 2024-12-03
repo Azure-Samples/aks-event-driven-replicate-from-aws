@@ -245,7 +245,7 @@ az aks nodepool update \
     --resource-group ${RESOURCE_GROUP} \
     --cluster-name ${AKS_CLUSTER_NAME} \
     --name systempool \
-    --node-taints CriticalAddonsOnly=true:NoSchedule \
+    --node-taints CriticalAddonsOnly=true:NoSchedule 
 
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') System node pool added successfully." ${NC}
