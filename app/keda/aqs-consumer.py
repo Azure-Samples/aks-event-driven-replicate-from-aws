@@ -86,7 +86,7 @@ def save_data(_message):
 try:
     # create a function to add numbers
     starttime = time.time()
-    storage_account_name, queue_name, cosmosdb_account_name, azure_table = check_env()
+    storage_account_name, queue_name, azure_table = check_env()
 
     while True:
         t = time.localtime()

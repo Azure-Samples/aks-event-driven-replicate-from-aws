@@ -2,10 +2,8 @@
 echo "Setting environment variables"
 
 #K8s Variables
-export K8sversion="1.28"
+export K8sversion="1.30"
 
-#Karpenter Variables
-export KARPENTER_VERSION=v0.32.0
 
 #KEDA Variables
 export NAMESPACE="keda"
@@ -19,11 +17,13 @@ export AZURE_QUEUE_NAME="aws2azmsgs"
 export AZURE_TABLE_NAME="aws2azpmts"
 #********************************************************************************************
 export LOCAL_NAME="aksdemo"
-export LOCATION="westus"
+export LOCATION="westus3"
 export TAGS="owner=aksdemo"
 export STORAGE_ACCOUNT_SKU="Standard_LRS"
 export ACR_SKU="Basic"
 export AKS_NODE_COUNT=3
+
+export MY_IP_ADDRESS=$(curl -s ifconfig.me)
 
 # echo color
 RED=$(tput setaf 1)

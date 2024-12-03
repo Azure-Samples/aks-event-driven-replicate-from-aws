@@ -115,7 +115,21 @@ export AZURE_STORAGE_ACCOUNT_NAME="storaksdemo${SUFFIX}"
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating storage account $AZURE_STORAGE_ACCOUNT_NAME in resource group $RESOURCE_GROUP" ${NC}
 if ! az storage account show --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
     # Generate storage account
-    az storage account create --name "$AZURE_STORAGE_ACCOUNT_NAME" --resource-group "$RESOURCE_GROUP" --sku "$STORAGE_ACCOUNT_SKU"
+    az storage account create --name "$AZURE_STORAGE_ACCOUNT_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --sku "$STORAGE_ACCOUNT_SKU"
+
+    az storage account update --name "$AZURE_STORAGE_ACCOUNT_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --default-action Deny
+
+    echo ${YELLOW} "$(date '+%Y-%m-%d %H:%M:%S%:z') DEBUG My IP address ${MY_IP_ADDRESS}" ${NC}
+
+    az storage account network-rule add \
+        --resource-group ${RESOURCE_GROUP} \
+        --account-name ${AZURE_STORAGE_ACCOUNT_NAME} \
+        --ip-address $MY_IP_ADDRESS
+
     if [ $? -eq 0 ]; then  
         echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage account $AZURE_STORAGE_ACCOUNT_NAME created successfully." ${NC}
      
@@ -141,14 +155,14 @@ echo "AZURE_QUEUE_NAME=${AZURE_QUEUE_NAME}" >>./deployment/deploy.state
 
 #
 # We are using Azure Storage Tables instead of CosmosDB for now
-az storage table create --name "$AZURE_COSMOSDB_TABLE" --account-name "$AZURE_STORAGE_ACCOUNT_NAME" --auth-mode login
+az storage table create --name "$AZURE_TABLE_NAME" --account-name "$AZURE_STORAGE_ACCOUNT_NAME" --auth-mode login
 if [ $? -eq 0 ]; then
-    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage table $AZURE_COSMOSDB_TABLE created successfully." ${NC}
+    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage table $AZURE_TABLE_NAME created successfully." ${NC}
 else
-    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage qutableeue $AZURE_COSMOSDB_TABLE creation failed." ${NC}
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Storage qutableeue $AZURE_TABLE_NAME creation failed." ${NC}
     exit 1
 fi
-echo "AZURE_COSMOSDB_TABLE=${AZURE_COSMOSDB_TABLE}" >>./deployment/deploy.state
+echo "AZURE_TABLE_NAME=${AZURE_TABLE_NAME}" >>./deployment/deploy.state
 
 # Create Azure Container Registry
 echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Creating Azure Container Registry" ${NC}
@@ -211,6 +225,7 @@ az aks create \
 --network-plugin-mode overlay \
 --network-dataplane cilium \
 --node-count "$AKS_NODE_COUNT" \
+--nodepool-name systempool \
 --enable-oidc-issuer \
 --attach-acr "$AZURE_CONTAINER_REGISTRY_NAME" \
 --enable-addons monitoring \
@@ -223,50 +238,37 @@ else
     exit 1
 fi
 
+# Wait for the AKS cluster provisioning to complete
+echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Waiting for the AKS cluster to be provisioned..." ${NC}
+
+while true; do
+    echo -e  "${YELLOW}Waiting for AKS cluster to be provisioned...${NC}"
+    provisionState=$(az aks show \
+    --resource-group ${RESOURCE_GROUP} \
+    --name ${AKS_CLUSTER_NAME} \
+    --only-show-errors \
+    --query 'provisioningState' \
+    -o tsv | tr -d '\r')
+    if [ "$provisionState" == "Succeeded" ]; then
+        break
+    fi
+    sleep 2
+done
+echo -e "${GREEN}AKS cluster provisioned successfully.${NC}"
+
 # Add a new system node pool to the AKS cluster 
 # that is tainted so no application pods are scheduled on it
-echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Adding system node pool with taint to the AKS cluster..." ${NC}
-az aks nodepool add \
+echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Updating system node pool with taint to the AKS cluster..." ${NC}
+az aks nodepool update \
     --resource-group ${RESOURCE_GROUP} \
     --cluster-name ${AKS_CLUSTER_NAME} \
     --name systempool \
-    --node-count 3 \
-    --node-taints CriticalAddonsOnly=true:NoSchedule \
-    --mode System
+    --node-taints CriticalAddonsOnly=true:NoSchedule 
+
 if [ $? -eq 0 ]; then
     echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') System node pool added successfully." ${NC}
 else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') System node pool addition failed." ${NC}
-    exit 1
-fi
-
-# Now delete the default nodepool so only system node pools with the taints are available
-echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Deleting default node pool from the AKS cluster..." ${NC}
-az aks nodepool delete \
-    --resource-group ${RESOURCE_GROUP} \
-    --cluster-name ${AKS_CLUSTER_NAME} \
-    --name nodepool1
-if [ $? -eq 0 ]; then
-    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Default node pool deleted successfully." ${NC}
-else
-    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Default node pool deletion failed." ${NC}
-    exit 1
-fi
-
-# Add a new user node pool to the AKS cluster 
-# only application pods are scheduled on it
-echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Adding application node pool with taint to the AKS cluster..." ${NC}
-az aks nodepool add \
-    --resource-group ${RESOURCE_GROUP} \
-    --cluster-name ${AKS_CLUSTER_NAME} \
-    --name appnodepool \
-    --node-count 3 \
-    --node-taints CriticalAddonsOnly=true:NoSchedule \
-    --mode User
-if [ $? -eq 0 ]; then
-    echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Application node pool added successfully." ${NC}
-else
-    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Application node pool addition failed." ${NC}
     exit 1
 fi
 
@@ -279,6 +281,56 @@ if [ $? -ne 0 ]; then
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster credentials retrieval failed." ${NC}
     exit 1
 fi
+
+# Now create the app [Karpenter] node pool
+
+cat <<EOF | kubectl apply -f -
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  annotations:
+    karpenter.sh/nodepool-hash: "12393960163388511505"
+    karpenter.sh/nodepool-hash-version: v2
+    kubernetes.io/description: General purpose NodePool for generic workloads
+    meta.helm.sh/release-name: aks-managed-karpenter-overlay
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2024-10-07T19:36:54Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    helm.toolkit.fluxcd.io/name: karpenter-overlay-main-adapter-helmrelease
+    helm.toolkit.fluxcd.io/namespace: 6704378c3385a600011c675e
+  name: default
+  resourceVersion: "1832"
+  uid: 59d68c8a-5cff-47a5-a378-5e425e8ddbe8
+spec:
+  disruption:
+    budgets:
+    - nodes: 100%
+    consolidationPolicy: WhenUnderutilized
+    expireAfter: Never
+  template:
+    spec:
+      nodeClassRef:
+        name: default
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: kubernetes.io/os
+        operator: In
+        values:
+        - linux
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      - key: karpenter.azure.com/sku-family
+        operator: In
+        values:
+        - D
+EOF
 
 #Check is the namespace already exists
 if kubectl get namespace $AQS_TARGET_NAMESPACE &>/dev/null; then
@@ -388,5 +440,33 @@ else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Table Data Contributor role to workload identity." ${NC}
     exit 1
 fi
+
+# Get the resource group associated with the AKS cluster
+nodeResourceGroup=$(az aks show \
+--name $AKS_CLUSTER_NAME \
+-g $RESOURCE_GROUP \
+--query nodeResourceGroup \
+-o tsv)
+
+NETWORK_RULE_NAME=netrul-stor-${LOCAL_NAME}-${SUFFIX}
+# Get the virtual network name and resource ID
+vnetInfo=$(az network vnet list --resource-group $nodeResourceGroup)
+vnetName=$(echo $vnetInfo | jq -r '.[0].name')
+subnetId=$(echo $vnetInfo | jq -r '.[0].subnets[0].id')
+subnetName=$(echo $vnetInfo | jq -r '.[0].subnets[0].name')
+
+# Add service endpoints to managed subnet
+az network vnet subnet update \
+--ids $subnetId \
+--service-endpoints "Microsoft.Storage"
+
+# Add a network rule to the storage account
+az storage account network-rule add \
+--resource-group $RESOURCE_GROUP \
+--account-name $AZURE_STORAGE_ACCOUNT_NAME \
+--subnet $subnetId
+
+# Output the results
+echo "Network rule '$NETWORK_RULE_NAME' added to storage account '$AZURE_STORAGE_ACCOUNT_NAME' for virtual network '$VNET_NAME' with ID '$VNET_ID'."
 
 echo "Deployment completed successfully."
