@@ -72,6 +72,11 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "500m"
+      tolerations:
+      - key: deployment
+        operator: Equal
+        value: $AQS_TARGET_DEPLOYMENT-pool
+        effect: NoSchedule
 EOF
 
 if [ $? -ne 0 ]; then
