@@ -442,7 +442,12 @@ else
 fi
 
 # Get the resource group associated with the AKS cluster
-nodeResourceGroup=$(az aks show --name $AKS_CLUSTER_NAME -g $RESOURCE_GROUP_NAME --query nodeResourceGroup -o tsv)
+nodeResourceGroup=$(az aks show \
+--name $AKS_CLUSTER_NAME \
+-g $RESOURCE_GROUP \
+--query nodeResourceGroup \
+-o tsv)
+
 NETWORK_RULE_NAME=netrul-stor-${LOCAL_NAME}-${SUFFIX}
 # Get the virtual network name and resource ID
 vnetInfo=$(az network vnet list --resource-group $nodeResourceGroup)
@@ -457,7 +462,7 @@ az network vnet subnet update \
 
 # Add a network rule to the storage account
 az storage account network-rule add \
---resource-group $RESOURCE_GROUP_NAME \
+--resource-group $RESOURCE_GROUP \
 --account-name $AZURE_STORAGE_ACCOUNT_NAME \
 --subnet $subnetId
 
