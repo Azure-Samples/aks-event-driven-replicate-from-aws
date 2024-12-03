@@ -448,6 +448,11 @@ nodeResourceGroup=$(az aks show \
 --query nodeResourceGroup \
 -o tsv)
 
+if [ $? -ne 0 ]; then
+    echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to get the node resource group for the AKS cluster." ${NC}
+    exit 1
+fi
+
 NETWORK_RULE_NAME=netrul-stor-${LOCAL_NAME}-${SUFFIX}
 # Get the virtual network name and resource ID
 vnetInfo=$(az network vnet list --resource-group $nodeResourceGroup)
@@ -460,13 +465,24 @@ az network vnet subnet update \
 --ids $subnetId \
 --service-endpoints "Microsoft.Storage"
 
+if [ $? -ne 0 ]; then
+    echo -e "${RED}$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to add service endpoints to the managed subnet.${NC}" 
+    exit 1
+fi
+echo -e "${GREEN}$(date '+%Y-%m-%d %H:%M:%S%:z') Service endpoints added to the managed subnet.${NC}" 
+
 # Add a network rule to the storage account
 az storage account network-rule add \
 --resource-group $RESOURCE_GROUP \
 --account-name $AZURE_STORAGE_ACCOUNT_NAME \
 --subnet $subnetId
 
-# Output the results
-echo "Network rule '$NETWORK_RULE_NAME' added to storage account '$AZURE_STORAGE_ACCOUNT_NAME' for virtual network '$VNET_NAME' with ID '$VNET_ID'."
+if [ $? -ne 0 ]; then
+    echo -e "${RED}$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to add network rule to the storage account.${NC}" 
+    exit 1
+fi
 
-echo "Deployment completed successfully."
+# Output the results
+echo -e  "${GREEN}Network rule '$NETWORK_RULE_NAME' added to storage account '$AZURE_STORAGE_ACCOUNT_NAME' for virtual network '$VNET_NAME' with ID '$VNET_ID'. ${NC}"
+
+echo -e "${GREEN}Deployment completed successfully.${NC}"
