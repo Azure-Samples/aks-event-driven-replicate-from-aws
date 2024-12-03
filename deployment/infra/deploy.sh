@@ -238,9 +238,27 @@ else
     exit 1
 fi
 
+# Wait for the AKS cluster provisioning to complete
+echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Waiting for the AKS cluster to be provisioned..." ${NC}
+
+while true; do
+    echo -e  "${YELLOW}Waiting for AKS cluster to be provisioned...${NC}"
+    provisionState=$(az aks show \
+    --resource-group ${RESOURCE_GROUP} \
+    --name ${AKS_CLUSTER_NAME} \
+    --only-show-errors \
+    --query 'provisioningState' \
+    -o tsv | tr -d '\r')
+    if [ "$provisionState" == "Succeeded" ]; then
+        break
+    fi
+    sleep 2
+done
+echo -e "${GREEN}AKS cluster provisioned successfully.${NC}"
+
 # Add a new system node pool to the AKS cluster 
 # that is tainted so no application pods are scheduled on it
-echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Adding system node pool with taint to the AKS cluster..." ${NC}
+echo ${GREEN} "$(date '+%Y-%m-%d %H:%M:%S%:z') Updating system node pool with taint to the AKS cluster..." ${NC}
 az aks nodepool update \
     --resource-group ${RESOURCE_GROUP} \
     --cluster-name ${AKS_CLUSTER_NAME} \
@@ -263,6 +281,56 @@ if [ $? -ne 0 ]; then
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') AKS cluster credentials retrieval failed." ${NC}
     exit 1
 fi
+
+# Now create the app [Karpenter] node pool
+
+cat <<EOF | kubectl apply -f -
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  annotations:
+    karpenter.sh/nodepool-hash: "12393960163388511505"
+    karpenter.sh/nodepool-hash-version: v2
+    kubernetes.io/description: General purpose NodePool for generic workloads
+    meta.helm.sh/release-name: aks-managed-karpenter-overlay
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2024-10-07T19:36:54Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    helm.toolkit.fluxcd.io/name: karpenter-overlay-main-adapter-helmrelease
+    helm.toolkit.fluxcd.io/namespace: 6704378c3385a600011c675e
+  name: default
+  resourceVersion: "1832"
+  uid: 59d68c8a-5cff-47a5-a378-5e425e8ddbe8
+spec:
+  disruption:
+    budgets:
+    - nodes: 100%
+    consolidationPolicy: WhenUnderutilized
+    expireAfter: Never
+  template:
+    spec:
+      nodeClassRef:
+        name: default
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: kubernetes.io/os
+        operator: In
+        values:
+        - linux
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - on-demand
+      - key: karpenter.azure.com/sku-family
+        operator: In
+        values:
+        - D
+EOF
 
 #Check is the namespace already exists
 if kubectl get namespace $AQS_TARGET_NAMESPACE &>/dev/null; then
@@ -372,7 +440,6 @@ else
     echo ${RED} "$(date '+%Y-%m-%d %H:%M:%S%:z') Failed to assign Storage Table Data Contributor role to workload identity." ${NC}
     exit 1
 fi
-
 
 # Get the resource group associated with the AKS cluster
 nodeResourceGroup=$(az aks show --name $AKS_CLUSTER_NAME -g $RESOURCE_GROUP_NAME --query nodeResourceGroup -o tsv)
